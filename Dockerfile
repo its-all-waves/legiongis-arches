@@ -1,4 +1,4 @@
-FROM ubuntu:18.04 as base 
+FROM ubuntu:18.04 AS base 
 USER root
 
 ## Setting default environment variables
@@ -10,7 +10,7 @@ ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update && apt-get install -y make software-properties-common
 
-FROM base as wheelbuilder
+FROM base AS wheelbuilder
 
 WORKDIR ${WHEELS}
 
@@ -36,11 +36,13 @@ RUN set -ex \
         python3.8-distutils \
         libldap2-dev libsasl2-dev ldap-utils \
         dos2unix \
+        git \
         " \
     && apt-get update -y \
     && apt-get install -y --no-install-recommends $BUILD_DEPS \
-    && curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py \
-    && python3.8 get-pip.py
+    && curl https://bootstrap.pypa.io/pip/3.8/get-pip.py -o get-pip.py \
+    && python3.8 get-pip.py \
+    && pip install pip==21.2
 
 RUN pip3 wheel --no-cache-dir -b /tmp -r ${WHEELS}/requirements.txt  \
     && pip3 wheel --no-cache-dir -b /tmp -r ${WHEELS}/requirements_dev.txt  \
@@ -73,40 +75,52 @@ RUN set -ex \
         python3.8 \
         python3.8-distutils \
         python3.8-venv \
+        build-essential \
+        libatlas-base-dev \
+        gfortran \
+        python3-setuptools \
+        libxml2-dev \
+        libxslt-dev \
+        python3.8-dev \
+        git \
     " \
     && apt-get install -y --no-install-recommends curl \
     && curl -sL https://deb.nodesource.com/setup_10.x | bash - \
     && curl -sL https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - \
-    && add-apt-repository "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -sc)-pgdg main" \
+    && add-apt-repository "deb http://apt-archive.postgresql.org/pub/repos/apt/ $(lsb_release -sc)-pgdg main" \
     && apt-get update -y \
     && apt-get install -y --no-install-recommends $RUN_DEPS \
-    && curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py \
+    && curl https://bootstrap.pypa.io/pip/3.8/get-pip.py -o get-pip.py \
     && python3.8 get-pip.py \
+    && pip install pip==21.2 \
     && apt-get install -y nodejs \
     && npm install -g yarn
 
 # Install Yarn components
-COPY ./arches/install/package.json ${ARCHES_ROOT}/arches/install/package.json
-COPY ./arches/install/.yarnrc ${ARCHES_ROOT}/arches/install/.yarnrc
-COPY ./arches/install/yarn.lock ${ARCHES_ROOT}/arches/install/yarn.lock
+COPY ./package.json ${ARCHES_ROOT}/arches/install/package.json
+COPY ./.yarnrc ${ARCHES_ROOT}/arches/install/.yarnrc
+COPY ./yarn.lock ${ARCHES_ROOT}/arches/install/yarn.lock
 WORKDIR ${ARCHES_ROOT}/arches/install
 RUN mkdir -p ${ARCHES_ROOT}/arches/app/media/packages
 RUN yarn install
 
-## Install virtualenv
 WORKDIR ${WEB_ROOT}
 
 RUN mv ${WHEELS}/entrypoint.sh entrypoint.sh
 
-RUN python3.8 -m venv ENV \
+RUN python3.8 -m venv ENV --system-site-packages \
     && . ENV/bin/activate \
+    && pip install --upgrade pip wheel setuptools \
+    && pip install cython==0.29.36 \
+    && pip install --only-binary=numpy numpy==1.21.3 \
+    && pip install shapely==1.8.5 \
     && pip install requests \
     && pip install -f ${WHEELS} django-auth-ldap \
     && pip install -f ${WHEELS} gunicorn \
-    && pip install -r ${WHEELS}/requirements.txt \
-                   -f ${WHEELS} \
-    && pip install -r ${WHEELS}/requirements_dev.txt \
-                   -f ${WHEELS} \
+    && grep -v "mapbox-vector-tile" ${WHEELS}/requirements.txt > ${WHEELS}/requirements_filtered.txt \
+    && pip install -r ${WHEELS}/requirements_filtered.txt -f ${WHEELS} \
+    && pip install mapbox-vector-tile \
+    && pip install -r ${WHEELS}/requirements_dev.txt -f ${WHEELS} \
     && rm -rf ${WHEELS} \
     && rm -rf /root/.cache/pip/*
 

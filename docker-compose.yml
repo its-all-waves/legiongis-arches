@@ -3,7 +3,8 @@ services:
 
     arches:
       container_name: arches
-      image: getty/arches:5.0
+      image: getty/arches:6.1
+      platform: linux/amd64
       build:
         context: .
         dockerfile: ./Dockerfile
@@ -40,6 +41,7 @@ services:
     nginx:
       container_name: nginx
       image: cvast/cvast-nginx:1.2.0
+      platform: linux/amd64
       restart: unless-stopped
       ports:
         - '80:80'
@@ -62,6 +64,7 @@ services:
     db:
       container_name: db
       image: kartoza/postgis:12.0
+      platform: linux/amd64
       volumes:
           - postgres-data:/var/lib/postgresql/data
           - postgres-log:/var/log/postgresql
@@ -78,6 +81,7 @@ services:
     couchdb:
       container_name: couchdb
       image: couchdb:2.1.1
+      platform: linux/amd64
       ports:
         - "5984:5984"
       environment:
@@ -90,6 +94,7 @@ services:
     elasticsearch:
       container_name: elasticsearch
       image: elasticsearch:7.5.1
+      platform: linux/amd64
       volumes:
         - elasticsearch-data:/usr/share/elasticsearch/data
       ports:
@@ -104,6 +109,7 @@ services:
     letsencrypt:
       container_name: letsencrypt
       image: cvast/cvast-letsencrypt:1.1
+      platform: linux/amd64
       volumes:
         - letsencrypt-acme-challenge:/var/www
         - letsencrypt:/etc/letsencrypt
