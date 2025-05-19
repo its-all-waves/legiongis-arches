@@ -1,14 +1,34 @@
-version: '2'
 services:
 
+    # TODO:
+    # [ ] Factor out env vars for the following, and use Docker compose variable substitution in arches and corresponding container for the variable, and use defaults where appropriate (mostly ports):
+    #
+    # - pg username, pw, dbname, port
+    # - couchdb user, pw, port
+    # - elasticsearch port
+    # - rabbitmq ports
+    # - timezone
+    #
+    # [ ] Update docker-compose-test.yml to match this file
+
     arches:
-      container_name: arches
+      container_name: arches6-2
       image: getty/arches:6.2
       platform: linux/amd64
       build:
         context: .
         dockerfile: ./Dockerfile
-      command: bash -c "source /web_root/ENV/bin/activate && cd /web_root/fpan && pip install -r requirements.txt && cd /tmp && git clone https://github.com/legiongis/arches-extensions.git && cd arches-extensions && pip install -e . && cd /web_root/fpan && python manage.py setup_hms && exec python manage.py runserver 0.0.0.0:8000"
+      command: bash -c "source /web_root/ENV/bin/activate \
+        && mkdir -p /web_root/arches-extensions \
+        && cd /web_root/arches-extensions \
+        && git clone https://github.com/legiongis/arches-extensions.git \
+        && cd arches-extensions \
+        && git checkout e349934 \
+        && pip install -e . \
+        && cd /web_root/fpan \
+        && pip install -r requirements.txt \
+        && python manage.py setup_hms
+        && python manage.py runserver 0.0.0.0:8000"
       volumes:
         - ../fpan:/web_root/fpan
         - arches-log:/arches/arches/logs
@@ -18,7 +38,7 @@ services:
         - INSTALL_DEFAULT_CONCEPTS=False
         - PGUSERNAME=postgres
         - PGPASSWORD=postgres
-        - PGDBNAME=arches
+        - PGDBNAME=fpan
         - PGHOST=arches_db
         - PGPORT=5432
         - COUCHDB_HOST=arches_couchdb
@@ -39,11 +59,12 @@ services:
         - arches_db
         - arches_elasticsearch
         - arches_couchdb
+        # - arches_rabbitmq  # WARNING: untested
       networks:
-        - arches_dev
+        - arches6-2_dev
 
-    nginx:
-      container_name: nginx
+    arches_nginx:
+      container_name: arches6-2_nginx
       image: cvast/cvast-nginx:1.2.0
       restart: unless-stopped
       ports:
@@ -51,8 +72,8 @@ services:
         - '443:443'
       volumes:
         - arches-static:/www/static
-        - letsencrypt-acme-challenge:/var/www
-        - letsencrypt:/etc/letsencrypt
+        - letsencrypt-acme-challenge-arches:/var/www
+        - letsencrypt-arches:/etc/letsencrypt
       environment:
         - NGINX_PROXY_MODE=local
         - NGINX_PROTOCOL=http
@@ -64,63 +85,63 @@ services:
       depends_on:
         - arches
       networks:
-        - arches_dev
+        - arches6-2_dev
 
     arches_db:
-      container_name: arches_db
-      image: postgis/postgis:13-3.2
+      container_name: arches6-2_postgres
+      image: postgis/postgis:14-3.2
       volumes:
-          - postgres-data:/var/lib/postgresql/data
-          - postgres-log:/var/log/postgresql
-          - ./arches/install/init-unix.sql:/docker-entrypoint-initdb.d/init.sql # to set up the DB template
+          - postgres-data-arches:/var/lib/postgresql
+          - postgres-log-arches:/var/log/postgresql
+          - ./arches/install/init-unix.sql:/docker-entrypoint-initdb.d/init.sql
       ports:
-        - '5432:5432'
+        - '${PGPORT:-5432}:5432'
       environment:
         - POSTGRES_USER=postgres
         - POSTGRES_PASSWORD=postgres
-        - POSTGRES_DB=postgres
+        - POSTGRES_DB=fpan
         - POSTGRES_MULTIPLE_EXTENSIONS=postgis,postgis_topology
         - TZ=PST
       networks:
-        - arches_dev
+        - arches6-2_dev
 
     arches_couchdb:
-      container_name: arches_couchdb
+      container_name: arches6-2_couchdb
       image: couchdb:3.3.2
       ports:
-        - "5984:5984"
+        - '${COUCHDB_PORT:-5984}:5984'
       environment:
         COUCHDB_USER: admin
         COUCHDB_PASSWORD: password
       volumes:
-        - couchdb-data:/usr/local/var/lib/couchdb
-        - couchdb-log:/usr/local/var/log/couchdb
+        - couchdb-data-arches:/usr/local/var/lib/couchdb
+        - couchdb-log-arches:/usr/local/var/log/couchdb
       networks:
-        - arches_dev
+        - arches6-2_dev
 
     arches_elasticsearch:
-      container_name: arches_elasticsearch
-      image: elasticsearch:7.9.2
+      container_name: arches6-2_elasticsearch
+      image: ${ES_BASE_IMAGE:-elasticsearch:7.17.13}
       volumes:
-        - elasticsearch-data:/usr/share/elasticsearch/data
+        - elasticsearch-data-arches:/usr/share/elasticsearch/data  # unused -- why present?
       ports:
-        - "9200:9200"
-        - "9300:9300"
+        - "${ESPORT:-9200}:9200"
+        # - "${ES_TRANSPORT_PORT:-9300}:9300" # for multi-node setup
       environment:
         - TZ=PST
         - discovery.type=single-node
         - discovery.seed_hosts=
         - "ES_JAVA_OPTS=-Xms400m -Xmx400m"
       networks:
-        - arches_dev
+        - arches6-2_dev
 
-    letsencrypt:
-      container_name: letsencrypt
+    arches_letsencrypt:
+      container_name: arches6-2_letsencrypt
       image: cvast/cvast-letsencrypt:1.1
       volumes:
-        - letsencrypt-acme-challenge:/var/www
-        - letsencrypt:/etc/letsencrypt
-        - letsencrypt-log:/var/log/letsencrypt
+        - letsencrypt-arches:/etc/letsencrypt
+        - letsencrypt-acme-challenge-arches:/var/www
+        - letsencrypt-log-arches:/var/log/letsencrypt
       command: get_certificate
       environment:
         - MODE=regular
@@ -130,21 +151,37 @@ services:
         - PERSISTENT_MODE=True
         - TZ=PST
       networks:
-        - arches_dev
+        - arches6-2_dev
+
+    # arches_rabbitmq:
+    #   container_name: arches6-2_rabbitmq
+    #   image: rabbitmq:3-management
+    #   hostname: my-rabbit
+    #   volumes:
+    #     - rabbitmq-data-arches:/var/lib/rabbitmq/mnesia/rabbit@my-rabbit
+    #     - rabbitmq-logs-arches:/var/log/rabbitmq/log
+    #   ports:
+    #     - '${RABBITMQ_3_AMQP_PORT:-5672}:5672'
+    #     - '${RABBITMQ_3_MANAGEMENT_PORT:-15672}:15672'
+    #   networks:
+    #     - arches6-2_dev
 
 networks:
-  arches_dev:
-    name: arches_dev
+  arches6-2_dev:
+    name: arches6-2_dev
     driver: bridge
 
 volumes:
     arches-log:
     arches-static:
-    couchdb-data:
-    couchdb-log:
-    postgres-data:
-    postgres-log:
-    elasticsearch-data:
-    letsencrypt:
-    letsencrypt-log:
-    letsencrypt-acme-challenge:
+    postgres-data-arches:
+    postgres-log-arches:
+    couchdb-data-arches:
+    couchdb-log-arches:
+    elasticsearch-data-arches:
+    letsencrypt-arches:
+    elasticsearch-upgrade-data-arches:
+    letsencrypt-log-arches:
+    letsencrypt-acme-challenge-arches:
+    # rabbitmq-data-arches:
+    # rabbitmq-logs-arches:
