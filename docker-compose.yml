@@ -18,13 +18,13 @@ services:
         - PGUSERNAME=postgres
         - PGPASSWORD=postgres
         - PGDBNAME=arches
-        - PGHOST=db
+        - PGHOST=arches_db
         - PGPORT=5432
-        - COUCHDB_HOST=couchdb
+        - COUCHDB_HOST=arches_couchdb
         - COUCHDB_PORT=5984
         - COUCHDB_USER=admin
         - COUCHDB_PASS=password
-        - ESHOST=elasticsearch
+        - ESHOST=arches_elasticsearch
         - ESPORT=9200
         - DJANGO_MODE=PROD
         - DJANGO_DEBUG=False
@@ -34,14 +34,15 @@ services:
       ports:
         - '8000:8000'
       depends_on:
-        - db
-        - elasticsearch
-        - couchdb
+        - arches_db
+        - arches_elasticsearch
+        - arches_couchdb
+      networks:
+        - arches_dev
 
     nginx:
       container_name: nginx
       image: cvast/cvast-nginx:1.2.0
-      platform: linux/amd64
       restart: unless-stopped
       ports:
         - '80:80'
@@ -60,11 +61,12 @@ services:
         - TZ=PST
       depends_on:
         - arches
+      networks:
+        - arches_dev
 
-    db:
-      container_name: db
-      image: kartoza/postgis:12.0
-      platform: linux/amd64
+    arches_db:
+      container_name: arches_db
+      image: postgis/postgis:13-3.2
       volumes:
           - postgres-data:/var/lib/postgresql/data
           - postgres-log:/var/log/postgresql
@@ -73,13 +75,15 @@ services:
         - '5432:5432'
       environment:
         - POSTGRES_USER=postgres
-        - POSTGRES_PASS=postgres
+        - POSTGRES_PASSWORD=postgres
         - POSTGRES_DB=postgres
         - POSTGRES_MULTIPLE_EXTENSIONS=postgis,postgis_topology
         - TZ=PST
+      networks:
+        - arches_dev
 
-    couchdb:
-      container_name: couchdb
+    arches_couchdb:
+      container_name: arches_couchdb
       image: couchdb:2.1.1
       platform: linux/amd64
       ports:
@@ -90,11 +94,12 @@ services:
       volumes:
         - couchdb-data:/usr/local/var/lib/couchdb
         - couchdb-log:/usr/local/var/log/couchdb
+      networks:
+        - arches_dev
 
-    elasticsearch:
-      container_name: elasticsearch
-      image: elasticsearch:7.5.1
-      platform: linux/amd64
+    arches_elasticsearch:
+      container_name: arches_elasticsearch
+      image: elasticsearch:7.9.2
       volumes:
         - elasticsearch-data:/usr/share/elasticsearch/data
       ports:
@@ -105,11 +110,12 @@ services:
         - discovery.type=single-node
         - discovery.seed_hosts=
         - "ES_JAVA_OPTS=-Xms400m -Xmx400m"
+      networks:
+        - arches_dev
 
     letsencrypt:
       container_name: letsencrypt
       image: cvast/cvast-letsencrypt:1.1
-      platform: linux/amd64
       volumes:
         - letsencrypt-acme-challenge:/var/www
         - letsencrypt:/etc/letsencrypt
@@ -122,6 +128,13 @@ services:
         - PRODUCTION_MODE=False
         - PERSISTENT_MODE=True
         - TZ=PST
+      networks:
+        - arches_dev
+
+networks:
+  arches_dev:
+    name: arches_dev
+    driver: bridge
 
 volumes:
     arches-log:
