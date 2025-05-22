@@ -58,7 +58,7 @@ services:
       depends_on:
         - arches_db
         - arches_elasticsearch
-        - arches_couchdb
+        # - arches_couchdb
         # - arches_rabbitmq  # WARNING: untested
       networks:
         - arches6-2_dev
@@ -105,19 +105,19 @@ services:
       networks:
         - arches6-2_dev
 
-    arches_couchdb:
-      container_name: arches6-2_couchdb
-      image: couchdb:3.3.2
-      ports:
-        - '${COUCHDB_PORT:-5984}:5984'
-      environment:
-        COUCHDB_USER: admin
-        COUCHDB_PASSWORD: password
-      volumes:
-        - couchdb-data-arches:/usr/local/var/lib/couchdb
-        - couchdb-log-arches:/usr/local/var/log/couchdb
-      networks:
-        - arches6-2_dev
+    # arches_couchdb:
+    #   container_name: arches6-2_couchdb
+    #   image: couchdb:3.3.2
+    #   ports:
+    #     - '${COUCHDB_PORT:-5984}:5984'
+    #   environment:
+    #     COUCHDB_USER: admin
+    #     COUCHDB_PASSWORD: password
+    #   volumes:
+    #     - couchdb-data-arches:/usr/local/var/lib/couchdb
+    #     - couchdb-log-arches:/usr/local/var/log/couchdb
+    #   networks:
+    #     - arches6-2_dev
 
     arches_elasticsearch:
       container_name: arches6-2_elasticsearch
@@ -176,8 +176,8 @@ volumes:
     arches-static:
     postgres-data-arches:
     postgres-log-arches:
-    couchdb-data-arches:
-    couchdb-log-arches:
+    # couchdb-data-arches:
+    # couchdb-log-arches:
     elasticsearch-data-arches:
     letsencrypt-arches:
     elasticsearch-upgrade-data-arches:
